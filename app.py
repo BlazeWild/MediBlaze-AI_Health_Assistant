@@ -245,5 +245,12 @@ def chat():
         print(f"Error: {str(e)}")
         return f"There was an error processing your request. Please try asking again in a different way.", 500
 
+@app.route("/health")
+def health():
+    return jsonify({"status": "ok"})
+
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8080, debug=True)
+    # Get port from environment variable (required for Railway)
+    port = int(os.environ.get('PORT', 8080))
+    # Make sure to bind to 0.0.0.0 for Railway
+    app.run(host="0.0.0.0", port=port, debug=False)
