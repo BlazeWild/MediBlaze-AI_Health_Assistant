@@ -1,4 +1,4 @@
-from langchain.document_loaders import PyPDFLoader, DirectoryLoader #for loading pdf files
+from langchain_community.document_loaders import PyPDFLoader, DirectoryLoader #for loading pdf files
 from langchain.text_splitter import RecursiveCharacterTextSplitter  #for chunking
 from langchain.embeddings import HuggingFaceEmbeddings #for embedding
 
