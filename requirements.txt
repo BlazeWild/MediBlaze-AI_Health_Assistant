@@ -3,5 +3,4 @@ flask==2.3.3
 python-dotenv==1.0.0
 pinecone==6.0.2
 google-generativeai==0.8.0
-gunicorn==21.2.0
--e . # local package 
+gunicorn==21.2.0 

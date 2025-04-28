@@ -9,51 +9,71 @@ from pinecone import Pinecone
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", os.urandom(24))  # For session management
 
+# Load environment variables from .env file if it exists
 load_dotenv()
 
 # Get environment variables with error handling
 PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-# Validate required environment variables
-if not PINECONE_API_KEY:
-    raise ValueError("PINECONE_API_KEY environment variable is not set")
-if not GEMINI_API_KEY:
-    raise ValueError("GEMINI_API_KEY environment variable is not set")
+print(f"PINECONE_API_KEY set: {'Yes' if PINECONE_API_KEY else 'No'}")
+print(f"GEMINI_API_KEY set: {'Yes' if GEMINI_API_KEY else 'No'}")
 
-# Initialize Pinecone
-pc = Pinecone(api_key=PINECONE_API_KEY)
+# Use dummy data if environment variables are not set
+use_dummy_data = False
+
+if not PINECONE_API_KEY:
+    print("Warning: PINECONE_API_KEY environment variable is not set. Using dummy mode.")
+    use_dummy_data = True
+if not GEMINI_API_KEY:
+    print("Warning: GEMINI_API_KEY environment variable is not set. Using dummy mode.")
+    use_dummy_data = True
 
 # Initialize embeddings
 embeddings = download_hugging_face_embeddings()
 
-# Get the Pinecone index
-index_name = "medical-chatbot"
-try:
-    # Check if index exists
-    indexes = pc.list_indexes()
-    print(f"Available indexes: {indexes}")
-    
-    if not index_name in [idx.name for idx in indexes]:
-        print(f"Warning: Index '{index_name}' not found!")
-    
-    index = pc.Index(index_name)
-    # Test query to verify index is working
-    test_embedding = embeddings.embed_query("test")
-    test_result = index.query(vector=test_embedding, top_k=1, include_metadata=True)
-    print(f"Test query successful: {test_result}")
-except Exception as e:
-    print(f"Error initializing Pinecone index: {str(e)}")
-    # Set up a dummy index function that returns default responses
-    class DummyIndex:
-        def query(self, **kwargs):
-            class DummyResponse:
-                def __init__(self):
-                    class DummyMatch:
-                        def __init__(self):
-                            self.metadata = {"text": "Acne is a common skin condition characterized by whiteheads, blackheads, pimples, and deeper lumps like cysts. It typically occurs when hair follicles get clogged with oil and dead skin cells. Acne most commonly appears on the face, neck, chest, back, and shoulders."}
-                    self.matches = [DummyMatch()]
-            return DummyResponse()
+# Set up a dummy index if needed
+class DummyIndex:
+    def query(self, **kwargs):
+        class DummyResponse:
+            def __init__(self):
+                class DummyMatch:
+                    def __init__(self):
+                        self.metadata = {"text": "Acne is a common skin condition characterized by whiteheads, blackheads, pimples, and deeper lumps like cysts. It typically occurs when hair follicles get clogged with oil and dead skin cells. Acne most commonly appears on the face, neck, chest, back, and shoulders."}
+                self.matches = [DummyMatch()]
+        return DummyResponse()
+
+# Initialize Pinecone if possible
+if not use_dummy_data:
+    try:
+        # Initialize Pinecone
+        pc = Pinecone(api_key=PINECONE_API_KEY)
+        
+        # Get the Pinecone index
+        index_name = "medical-chatbot"
+        try:
+            # Check if index exists
+            indexes = pc.list_indexes()
+            print(f"Available indexes: {indexes}")
+            
+            if not index_name in [idx.name for idx in indexes]:
+                print(f"Warning: Index '{index_name}' not found!")
+                use_dummy_data = True
+            else:
+                index = pc.Index(index_name)
+                # Test query to verify index is working
+                test_embedding = embeddings.embed_query("test")
+                test_result = index.query(vector=test_embedding, top_k=1, include_metadata=True)
+                print(f"Test query successful: {test_result}")
+        except Exception as e:
+            print(f"Error initializing Pinecone index: {str(e)}")
+            use_dummy_data = True
+    except Exception as e:
+        print(f"Error initializing Pinecone: {str(e)}")
+        use_dummy_data = True
+
+# Use dummy index if needed
+if use_dummy_data:
     index = DummyIndex()
     print("Using dummy index for fallback functionality")
 
@@ -90,10 +110,44 @@ def get_similar_docs(query, k=10):
         # Return a fallback document set when something goes wrong
         return ["Acne is a common skin condition characterized by whiteheads, blackheads, pimples, and deeper lumps like cysts. It typically occurs when hair follicles get clogged with oil and dead skin cells. Acne most commonly appears on the face, neck, chest, back, and shoulders."]
 
-# Initialize Google's Gemini model
-from google.generativeai import GenerativeModel, configure
-configure(api_key=GEMINI_API_KEY)
-model = GenerativeModel("gemini-1.5-flash")
+# Initialize Google's Gemini model if available
+try:
+    if not use_dummy_data and GEMINI_API_KEY:
+        from google.generativeai import GenerativeModel, configure
+        configure(api_key=GEMINI_API_KEY)
+        model = GenerativeModel("gemini-1.5-flash")
+        print("Google Gemini model initialized")
+    else:
+        # Create a dummy model class for testing
+        class DummyModel:
+            def generate_content(self, prompt):
+                class DummyResponse:
+                    def __init__(self):
+                        if "CASUAL" in prompt:
+                            self.text = "CASUAL"
+                        elif "determine if this message" in prompt.lower():
+                            self.text = "MEDICAL" if any(word in prompt.lower() for word in ["illness", "disease", "acne", "treatment", "doctor", "medicine", "medical"]) else "CASUAL"
+                        else:
+                            self.text = "I'm a dummy response. In a real environment, I would provide helpful medical information based on your question."
+                return DummyResponse()
+        model = DummyModel()
+        print("Using dummy model for testing")
+except Exception as e:
+    print(f"Error initializing Gemini model: {str(e)}")
+    # Create a dummy model class for testing
+    class DummyModel:
+        def generate_content(self, prompt):
+            class DummyResponse:
+                def __init__(self):
+                    if "CASUAL" in prompt:
+                        self.text = "CASUAL"
+                    elif "determine if this message" in prompt.lower():
+                        self.text = "MEDICAL" if any(word in prompt.lower() for word in ["illness", "disease", "acne", "treatment", "doctor", "medicine", "medical"]) else "CASUAL"
+                    else:
+                        self.text = "I'm a dummy response. In a real environment, I would provide helpful medical information based on your question."
+            return DummyResponse()
+    model = DummyModel()
+    print("Using dummy model due to initialization error")
 
 @app.route("/")
 def index():
