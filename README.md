@@ -1,1 +1,1 @@
-# Medical_CHATBOT
+# MediBlazeAI - AI Health Assistant
